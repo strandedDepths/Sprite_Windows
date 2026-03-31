@@ -1,0 +1,2 @@
+Place your background images here (PNG)
+e.g.: jungle.png, forest.png
