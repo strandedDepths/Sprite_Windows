@@ -75,6 +75,7 @@ class Editor:
 
         # ── Misc ─────────────────────────────────────────────────────────────
         self.last_dir   = os.path.abspath(".")   # last browsed directory
+        self._playlist  = None  # active Playlist instance for editor music preview
         self._undo_stack = []   # list of plain-dict snapshots (max 30)
         self.status     = "Right-click canvas to add items  |  Ctrl+click to multi-select"
         self.canvas_half = False   # toggle half-size orange canvas
@@ -142,6 +143,10 @@ class Editor:
                     ox, oy    = self.doff[item.id]
                     item.x    = sx - ox
                     item.y    = sy - oy
+
+        # Advance the music playlist (picks next random track when current ends)
+        if self._playlist is not None:
+            self._playlist.update()
 
         # Update hover state for all toolbar buttons
         for b in self._all_btns():
@@ -463,16 +468,20 @@ class Editor:
 
     def _play(self):
         """Start music playback in the editor (preview only)."""
+        # Stop any currently running playlist before starting a new one
+        if self._playlist is not None:
+            self._playlist.stop()
         if self.scene.music_folder and os.path.isdir(self.scene.music_folder):
-            pl = Playlist()
-            pl.load_folder(self.scene.music_folder)
-            pl.play_random()
+            self._playlist = Playlist()
+            self._playlist.load_folder(self.scene.music_folder)
+            self._playlist.play_random()
             self.status = "♪ Playing (random folder)"
         elif self.scene.music and os.path.exists(self.scene.music):
-            pygame.mixer.music.load(self.scene.music)
-            pygame.mixer.music.play(-1)
+            self._playlist = Playlist()
+            self._playlist.single_track(self.scene.music)
             self.status = "♪ Playing"
         else:
+            self._playlist = None
             self.status = "No music — right-click → Set Music Folder"
 
     def _launch_player(self):
@@ -486,17 +495,21 @@ class Editor:
         from main import run_player   # local import breaks the circular dependency
         import tempfile
         self.scene.canvas_half = self.canvas_half
-        tmp = os.path.join(tempfile.gettempdir(), "_spriteWindows_preview.json")
+        tmp = os.path.join(tempfile.gettempdir(), "_dk_preview.json")
         self.scene.save(tmp)
         cr       = self._cr()           # orange-bordered canvas rect
         W, H     = self.S.get_size()
         run_player(tmp, canvas_size=(cr.w, cr.h))
         # Restore the editor window after the player closes
         pygame.display.set_mode((W, H), pygame.RESIZABLE)
-        pygame.display.set_caption("Sprite Windows Scene Editor")
+        pygame.display.set_caption("DK Scene Editor")
 
     def _stop(self):
-        pygame.mixer.music.stop()
+        if self._playlist is not None:
+            self._playlist.stop()
+            self._playlist = None
+        else:
+            pygame.mixer.music.stop()
         self.status = "Stopped"
 
     def _save(self):
@@ -717,7 +730,7 @@ class Editor:
         """Render the top toolbar strip with all action buttons."""
         W = self.S.get_width()
         pygame.draw.rect(self.S, C_TOOLBAR, (0, 0, W, TOOL_H))
-        txt(self.S, "◈ Sprite Windows Scene Editor", self.F["md"], C_ACCENT,
+        txt(self.S, "◈ DK Scene Editor", self.F["md"], C_ACCENT,
             W - PANEL_W - 10, 15, align="right")
         for b in self._toolbar_btns():
             b.draw(self.S)
@@ -1088,5 +1101,4 @@ class Editor:
         """Render the one-line status message at the bottom of the screen."""
         W, H = self.S.get_size()
         txt(self.S, self.status, self.F["xs"], C_DIM, 8, H - 18)
-
 
